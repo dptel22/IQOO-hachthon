@@ -70,7 +70,7 @@ TEST_SIZE = 100
 LABEL_NOISE_RATE = 0.18  # 18% label flip rate
 
 # ── Error-code taxonomy ───────────────────────────────────────────────────────
-# Maps each code to (category, human-readable reason from Razorpay docs)
+# Maps each code to (category, human-readable reason)
 
 ERROR_CODES = {
     # Temporary failures — 40%

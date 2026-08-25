@@ -1,4 +1,4 @@
-# Razorpay AI Buildathon — Track 3: AI Revenue Recovery
+# AI Revenue Recovery Pipeline
 
 **Submission by:** [Your Name], 3rd-year AIML Student
 
@@ -75,7 +75,7 @@ Outputs created:
   "customer_id": "cust_<8chars>",
   "payment_method": "card|upi|netbanking|wallet",
   "error_code": "payment_gateway_error|payment_declined|...",
-  "error_reason": "Human-readable from Razorpay docs",
+  "error_reason": "Human-readable error description",
   "hour_of_day": 0-23,
   "prior_retry_count": 0-5,
   "recovered": 0|1,
@@ -253,7 +253,7 @@ No `shap_values`. Explanation = standardized_feature × coefficient (logistic re
 
 - ❌ XGBoost, SHAP, or any ensemble/tree models
 - ❌ Separate "Diagnosis/Intervention/Execution agent" modules
-- ❌ Live Razorpay test-mode API integration
+- ❌ Live payment gateway API integration
 - ❌ ROI metric
 - ❌ UI/dashboard (terminal output only)
 - ❌ Time-of-day retry restrictions or customer-preference flags as escalation triggers
