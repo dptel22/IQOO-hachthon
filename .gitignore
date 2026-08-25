@@ -1,0 +1,90 @@
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg
+*.egg-info/
+dist/
+build/
+*.manifest
+*.spec
+
+# ─── Model Artifacts (Large Binaries) ───
+*.pkl
+*.joblib
+*.h5
+*.onnx
+*.pb
+*.pt
+*.pth
+
+# ─── Data Files ───
+*.jsonl
+*.csv
+*.tsv
+*.parquet
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── Generated Outputs ───
+audit_log.jsonl
+measurement_report.json
+measurement_report.md
+synthetic_payment_failures*.jsonl
+
+# ─── Node.js / Frontend ───
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+build/
+.next/
+.out/
+.cache/
+*.local
+
+# ─── Environment & Secrets ───
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets.json
+config.local.js
+
+# ─── IDE & Editors ───
+.agents/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+
+# ─── Logs ───
+*.log
+logs/
+
+# ─── Test & Coverage ───
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+
+# ─── OS ───
+.DS_Store
+Thumbs.db
+Desktop.ini
