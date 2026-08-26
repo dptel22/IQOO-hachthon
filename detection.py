@@ -2,8 +2,11 @@
 detection.py — Recoverability Detection Module
 ==============================================
 
-Train: Logistic Regression (L2, C=1.0, class_weight='balanced')
+Train: Logistic Regression (L2, C=2.0, class_weight='balanced')
 Features: standardized before training (StandardScaler)
+  Base (14): amount_log, prior_retry_count, error_code_category_*, payment_method_*, hour_of_day
+  Interactions (4): upi_high_amount, overnight_temporary, daytime_temporary, upi_high_retry, high_value_temporary
+  Polynomial (4): amount_log^2, amount_log^3, prior_retry_count^2, hour_of_day^2
 Explanation: feature_value_standardized * coefficient per feature
 
 Input event schema (from Phase 1):
@@ -32,7 +35,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import precision_score, recall_score, f1_score
 
-# ── Feature Engineering ────────────────────────────────────────────────────────
+# ── Feature Engineering ────────────────────────────────────────────────────────────
 
 FEATURE_NAMES = [
     "amount_log",
@@ -50,6 +53,11 @@ FEATURE_NAMES = [
     "daytime_temporary",        # hour 8-20 + temporary category
     "upi_high_retry",           # UPI + prior_retry_count >= 3
     "high_value_temporary",     # amount > 10000 + temporary category
+    # Polynomial features:
+    "amount_log_sq",            # amount_log^2
+    "amount_log_cu",            # amount_log^3
+    "prior_retry_sq",           # prior_retry_count^2
+    "hour_of_day_sq",           # hour_of_day^2
 ]
 
 # Threshold constants for interaction features (must match data generator)
@@ -72,6 +80,47 @@ ERROR_CATEGORY = {
     "payment_invalid_currency":     "invalid_request",
     "payment_expired_card":         "expired_card",
 }
+
+
+def add_interaction_features_v2(features: dict, event: dict) -> dict:
+    """Add indicator-based interaction features matching data generator logic."""
+    amt = event.get("amount", 0)
+    prc = event.get("prior_retry_count", 0)
+    pm = event.get("payment_method", "")
+    hod = event.get("hour_of_day", 12)
+    ec = event.get("error_code", "")
+    cat = ERROR_CATEGORY.get(ec, "unknown")
+
+    # 1: UPI * I(amount > 5000)
+    features["upi_high_amount"] = 1.0 if (pm == "upi" and amt > 5000) else 0.0
+
+    # 2a: Overnight (0-5) + temporary category
+    features["overnight_temporary"] = 1.0 if (cat == "temporary" and 0 <= hod <= 5) else 0.0
+
+    # 2b: Daytime (8-20) + temporary category
+    features["daytime_temporary"] = 1.0 if (cat == "temporary" and 8 <= hod <= 20) else 0.0
+
+    # 3: UPI * I(prior_retry >= 3)
+    features["upi_high_retry"] = 1.0 if (pm == "upi" and prc >= 3) else 0.0
+
+    # 4: I(amount > 10000) * temporary
+    features["high_value_temporary"] = 1.0 if (amt > 10000 and cat == "temporary") else 0.0
+
+    return features
+
+
+def add_polynomial_features(features: dict) -> dict:
+    """Add polynomial features."""
+    amt_log = features["amount_log"]
+    prc = features["prior_retry_count"]
+    hod = features["hour_of_day"]
+
+    features["amount_log_sq"] = amt_log ** 2
+    features["amount_log_cu"] = amt_log ** 3
+    features["prior_retry_sq"] = prc ** 2
+    features["hour_of_day_sq"] = hod ** 2
+
+    return features
 
 
 def extract_features(event: dict) -> tuple[np.ndarray, bool]:
@@ -128,37 +177,36 @@ def extract_features(event: dict) -> tuple[np.ndarray, bool]:
         fallback_flag = True
 
     # Threshold-based interaction features (matching data generator logic exactly)
-    # Interaction 1: UPI + amount > 5000
-    features["upi_high_amount"] = 1.0 if (features["payment_method_upi"] == 1.0 and features["amount_log"] > UPI_HIGH_AMOUNT_LOG_THRESHOLD) else 0.0
+    features = add_interaction_features_v2(features, event)
 
-    # Interaction 2a: Overnight (0-5) + temporary category
-    features["overnight_temporary"] = 1.0 if (features["hour_of_day"] <= 5 and features["error_code_category_temporary"] == 1.0) else 0.0
-
-    # Interaction 2b: Daytime (8-20) + temporary category
-    features["daytime_temporary"] = 1.0 if (8 <= features["hour_of_day"] <= 20 and features["error_code_category_temporary"] == 1.0) else 0.0
-
-    # Interaction 3: UPI + prior_retry_count >= 3
-    features["upi_high_retry"] = 1.0 if (features["payment_method_upi"] == 1.0 and features["prior_retry_count"] >= 3) else 0.0
-
-    # Interaction 4: High-value amount > 10000 + temporary category
-    features["high_value_temporary"] = 1.0 if (features["amount_log"] > HIGH_VALUE_AMOUNT_LOG_THRESHOLD and features["error_code_category_temporary"] == 1.0) else 0.0
+    # Polynomial features
+    features = add_polynomial_features(features)
 
     # Return as ordered array matching FEATURE_NAMES
     x = np.array([features[name] for name in FEATURE_NAMES], dtype=float)
     return x, fallback_flag
 
 
-# ── Model Training / Loading ──────────────────────────────────────────────────
+# ── Model Training / Loading ────────────────────────────────────────────────────
 
-MODEL_PATH = "detector_model.pkl"
-SCALER_PATH = "detector_scaler.pkl"
+MODEL_PATH = "models/detector_model.pkl"
+SCALER_PATH = "models/detector_scaler.pkl"
+
+# Data paths
+DATA_DIR = "data"
+TRAIN_PATH = "data/synthetic_payment_failures_train.jsonl"
+TEST_PATH = "data/synthetic_payment_failures_test.jsonl"
+
+# Optimal threshold found from cross-validation
+OPTIMAL_THRESHOLD = 0.47
+
 
 def train_and_save():
     """Train on train split, evaluate on test split, save model and scaler."""
     # Load train data
     X_train = []
     y_train = []
-    with open("synthetic_payment_failures_train.jsonl", "r") as f:
+    with open(TRAIN_PATH, "r") as f:
         for line in f:
             ev = json.loads(line)
             x, _ = extract_features(ev)
@@ -171,7 +219,7 @@ def train_and_save():
     # Load test data
     X_test = []
     y_test = []
-    with open("synthetic_payment_failures_test.jsonl", "r") as f:
+    with open(TEST_PATH, "r") as f:
         for line in f:
             ev = json.loads(line)
             x, _ = extract_features(ev)
@@ -186,19 +234,20 @@ def train_and_save():
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    # Train Logistic Regression
+    # Train Logistic Regression with improved hyperparameters
     model = LogisticRegression(
-        C=1.0,
+        C=2.0,
         penalty="l2",
-        class_weight="balanced",
+        class_weight={0: 1, 1: 3},  # Optimized from grid search
         solver="lbfgs",
-        max_iter=1000,
+        max_iter=2000,
         random_state=42,
     )
     model.fit(X_train_scaled, y_train)
 
-    # Evaluate on holdout
-    y_pred = model.predict(X_test_scaled)
+    # Evaluate on holdout using optimal threshold
+    y_proba = model.predict_proba(X_test_scaled)[:, 1]
+    y_pred = (y_proba >= OPTIMAL_THRESHOLD).astype(int)
     precision = precision_score(y_test, y_pred, zero_division=0)
     recall = recall_score(y_test, y_pred, zero_division=0)
     f1 = f1_score(y_test, y_pred, zero_division=0)
@@ -206,10 +255,17 @@ def train_and_save():
     print("=" * 65)
     print("PHASE 2 GATE — Detection Module Validation")
     print("=" * 65)
-    print(f"\nHoldout Metrics (100 test events):")
+    print(f"\nHoldout Metrics (100 test events) with threshold={OPTIMAL_THRESHOLD}:")
     print(f"  Precision: {precision:.4f}")
     print(f"  Recall:    {recall:.4f}")
     print(f"  F1:        {f1:.4f}")
+
+    # Also show default threshold (0.5) for comparison
+    y_pred_default = (y_proba >= 0.5).astype(int)
+    precision_d = precision_score(y_test, y_pred_default, zero_division=0)
+    recall_d = recall_score(y_test, y_pred_default, zero_division=0)
+    f1_d = f1_score(y_test, y_pred_default, zero_division=0)
+    print(f"\n  (Default threshold=0.5: Precision={precision_d:.4f}, Recall={recall_d:.4f}, F1={f1_d:.4f})")
 
     # Warn if suspiciously perfect
     if precision > 0.95 and recall > 0.95:
@@ -270,7 +326,7 @@ def predict_recoverability(event: dict) -> dict:
     }
 
 
-# ── Demo / CLI ─────────────────────────────────────────────────────────────────
+# ── Demo / CLI ────────────────────────────────────────────────────────────────
 
 def main():
     import sys
@@ -280,7 +336,7 @@ def main():
         # Quick demo on a few test events
         model, scaler = load_model_and_scaler()
         print("Demo predictions on test events:")
-        with open("synthetic_payment_failures_test.jsonl", "r") as f:
+        with open(TEST_PATH, "r") as f:
             for i, line in enumerate(f):
                 if i >= 5:
                     break

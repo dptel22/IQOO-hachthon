@@ -16,13 +16,13 @@ build/
 *.spec
 
 # ─── Model Artifacts (Large Binaries) ───
-*.pkl
 *.joblib
 *.h5
 *.onnx
 *.pb
 *.pt
 *.pth
+*.pkl
 
 # ─── Data Files ───
 *.jsonl
@@ -34,10 +34,11 @@ build/
 *.sqlite3
 
 # ─── Generated Outputs ───
-audit_log.jsonl
-measurement_report.json
-measurement_report.md
-synthetic_payment_failures*.jsonl
+data/
+logs/
+reports/
+models/
+*.json
 
 # ─── Node.js / Frontend ───
 node_modules/

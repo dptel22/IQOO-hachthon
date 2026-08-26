@@ -23,7 +23,7 @@ from detection import FEATURE_NAMES, ERROR_CATEGORY, extract_features, UPI_HIGH_
 def load_full_dataset():
     """Load all 500 events from the full dataset."""
     X, y, raw = [], [], []
-    with open('synthetic_payment_failures.jsonl', 'r') as f:
+    with open('data/synthetic_payment_failures.jsonl', 'r') as f:
         for line in f:
             ev = json.loads(line)
             x, _ = extract_features(ev)
@@ -32,57 +32,6 @@ def load_full_dataset():
             raw.append(ev)
     return np.array(X), np.array(y), raw
 
-# ── Feature engineering (matching best model from test_interactions.py) ──────────
-
-def add_polynomial_features(X, raw):
-    """Add polynomial features: amount_log^2, amount_log^3, prior_retry_count^2, hour_of_day^2"""
-    n = X.shape[0]
-    poly = np.zeros((n, 4))
-    for i, ev in enumerate(raw):
-        amt_log = X[i, 0]
-        prc = X[i, 1]
-        hod = X[i, 8]
-        poly[i, 0] = amt_log ** 2
-        poly[i, 1] = amt_log ** 3
-        poly[i, 2] = prc ** 2
-        poly[i, 3] = hod ** 2
-    return np.hstack([X, poly])
-
-def add_interaction_features_v2(X, raw):
-    """Add indicator-based interaction features matching data generator logic"""
-    n = X.shape[0]
-    inter = np.zeros((n, 4))
-    for i, ev in enumerate(raw):
-        amt = ev['amount']
-        prc = ev['prior_retry_count']
-        pm = ev['payment_method']
-        hod = ev['hour_of_day']
-        ec = ev['error_code']
-        cat = ERROR_CATEGORY.get(ec, 'unknown')
-
-        # 1: UPI * I(amount > 5000)
-        if pm == 'upi' and amt > 5000:
-            inter[i, 0] = 1.0
-        # 2: I(hour in 0-5) * temporary - I(hour in 8-20) * temporary
-        if cat == 'temporary':
-            if 0 <= hod <= 5:
-                inter[i, 1] = -1.0
-            elif 8 <= hod <= 20:
-                inter[i, 1] = 1.0
-        # 3: UPI * I(prior_retry >= 3)
-        if pm == 'upi' and prc >= 3:
-            inter[i, 2] = 1.0
-        # 4: I(amount > 10000) * temporary
-        if amt > 10000 and cat == 'temporary':
-            inter[i, 3] = 1.0
-    return np.hstack([X, inter])
-
-def build_best_model_features(X, raw):
-    """Build the complete best feature set: base + interactions + polynomials"""
-    X_with_inter = add_interaction_features_v2(X, raw)
-    X_full = add_polynomial_features(X_with_inter, raw)
-    return X_full
-
 # ── 5-Fold Stratified CV ─────────────────────────────────────────────────────────
 
 def run_stratified_cv():
@@ -90,12 +39,9 @@ def run_stratified_cv():
     print("5-FOLD STRATIFIED CROSS-VALIDATION ON FULL DATASET (500 samples)")
     print("=" * 70)
 
-    # Load data
-    X_base, y, raw = load_full_dataset()
+    # Load data - features already include interactions and polynomials via extract_features
+    X, y, raw = load_full_dataset()
     print(f"\nDataset loaded: {len(y)} samples, {sum(y)} positive ({sum(y)/len(y)*100:.1f}%)")
-
-    # Build best feature set
-    X = build_best_model_features(X_base, raw)
     print(f"Feature matrix shape: {X.shape}")
 
     # Best hyperparameters from test_interactions.py
@@ -188,31 +134,31 @@ def confirm_model_saved():
 
     # Check files exist
     import os
-    model_exists = os.path.exists('detector_model.pkl')
-    scaler_exists = os.path.exists('detector_scaler.pkl')
-    print(f"detector_model.pkl exists: {model_exists}")
-    print(f"detector_scaler.pkl exists: {scaler_exists}")
+    model_exists = os.path.exists('models/detector_model.pkl')
+    scaler_exists = os.path.exists('models/detector_scaler.pkl')
+    print(f"models/detector_model.pkl exists: {model_exists}")
+    print(f"models/detector_scaler.pkl exists: {scaler_exists}")
 
     # Try loading with pipeline.py's logic
     try:
         import detection
-        with open('detector_model.pkl', 'rb') as f:
+        with open('models/detector_model.pkl', 'rb') as f:
             model = pickle.load(f)
-        with open('detector_scaler.pkl', 'rb') as f:
+        with open('models/detector_scaler.pkl', 'rb') as f:
             scaler = pickle.load(f)
-        print("✓ Model and scaler load successfully")
+        print("[OK] Model and scaler load successfully")
 
         # Test prediction on a sample event
-        with open('synthetic_payment_failures.jsonl', 'r') as f:
+        with open('data/synthetic_payment_failures.jsonl', 'r') as f:
             ev = json.loads(f.readline())
         x, _ = detection.extract_features(ev)
         x_scaled = scaler.transform(x.reshape(1, -1))
         p = float(model.predict_proba(x_scaled)[0, 1])
-        print(f"✓ Test prediction works: p_recoverable = {p:.4f}")
+        print(f"[OK] Test prediction works: p_recoverable = {p:.4f}")
 
         model_saved = True
     except Exception as e:
-        print(f"✗ Error loading model: {e}")
+        print(f"[ERROR] Error loading model: {e}")
         model_saved = False
 
     return model_saved

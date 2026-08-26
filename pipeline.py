@@ -30,7 +30,7 @@ import detection
 
 # ── Audit Log Configuration ──────────────────────────────────────────────────
 
-AUDIT_LOG_PATH = "audit_log.jsonl"
+AUDIT_LOG_PATH = "logs/audit_log.jsonl"
 
 # Global idempotency store (in-memory for this run)
 _idempotency_store: dict[str, dict] = {}
@@ -214,7 +214,7 @@ def _decide_action(p_recoverable: float, event: dict, live_retry_count: int) -> 
     Decision logic (locked rules):
       if amount > 10000:           escalate, "amount_above_threshold"
       elif live_retry_count >= 3:  escalate, "max_retries_exhausted"
-      elif p_recoverable >= 0.5:   retry,    "risk_score_above_threshold"
+      elif p_recoverable >= 0.47:  retry,    "risk_score_above_threshold"
       else:                        no_action,"risk_score_below_threshold"
     """
     amount = float(event["amount"])
@@ -223,7 +223,7 @@ def _decide_action(p_recoverable: float, event: dict, live_retry_count: int) -> 
         return "escalate", "amount_above_threshold"
     elif live_retry_count >= 3:
         return "escalate", "max_retries_exhausted"
-    elif p_recoverable >= 0.5:
+    elif p_recoverable >= 0.47:
         return "retry", "risk_score_above_threshold"
     else:
         return "no_action", "risk_score_below_threshold"
@@ -503,7 +503,7 @@ def process_event(event: dict) -> dict:
 
 # ── Batch Runner ──────────────────────────────────────────────────────────────
 
-def run_batch(input_path: str = "synthetic_payment_failures.jsonl") -> list[dict]:
+def run_batch(input_path: str = "data/synthetic_payment_failures.jsonl") -> list[dict]:
     """Run pipeline on all events in input file. Returns list of outcomes."""
     outcomes = []
     with open(input_path, "r") as f:
@@ -534,7 +534,7 @@ def main():
     else:
         # Quick demo on first 5 events
         print("Demo on first 5 events:")
-        with open("synthetic_payment_failures.jsonl", "r") as f:
+        with open("data/synthetic_payment_failures.jsonl", "r") as f:
             for i, line in enumerate(f):
                 if i >= 5:
                     break

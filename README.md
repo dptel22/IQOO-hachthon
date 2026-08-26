@@ -23,7 +23,7 @@ This project implements a **payment degradation → root cause → recovery** pi
 
 | Area | Decision |
 |------|----------|
-| **Model** | Logistic Regression only (L2, C=1.0, class_weight='balanced') — no XGBoost, no SHAP |
+| **Model** | Logistic Regression only (L2, C=2.0, class_weight={0:1, 1:3}) — no XGBoost, no SHAP |
 | **Pipeline** | Single `process_event()` function with private helpers — no separate agent modules |
 | **Escalation Rules** | Exactly two: (1) `amount > ₹10,000` immediate escalation, (2) `live_retry_count >= 3` max retries exhausted |
 | **Failure Handlers** | (1) Missing/malformed features → neutral fallback + flag, (2) Infra timeout → bounded retry (separate counter) |
@@ -142,9 +142,9 @@ Then **18% of labels are flipped** as noise.
 ```
 
 **Holdout Metrics (from `python detection.py train`):**
-- Precision: 0.3824
-- Recall: 0.4483
-- F1: 0.4127
+- Precision: 0.3158
+- Recall: 0.6207
+- F1: 0.4186
 
 These are **detection metrics only** — they measure classifier quality against the dataset's `recovered` label. They are NOT the pipeline recovery rate.
 
@@ -187,16 +187,16 @@ These are **detection metrics only** — they measure classifier quality against
 
 #### A. Detection Metrics (Model Quality)
 From Phase 2 holdout — independent of pipeline execution.
-- Precision: 0.3824, Recall: 0.4483, F1: 0.4127
+- Precision: 0.3158, Recall: 0.6207, F1: 0.4186
 
 #### B. Pipeline / Business Metrics (from audit log)
 | Metric | Count | Amount |
 |--------|-------|--------|
-| Recovered | 108 | INR 238,526.93 |
-| Correctly Stopped (rules fired) | 180 | INR 1,685,344.32 |
-| Escalated Unresolved | 180 | INR 1,685,344.32 |
-| No Action | 212 | INR 422,996.48 |
-| **Recovery Rate** (recovered ÷ flagged for retry) | | **0.5870** |
+| Recovered | 123 | INR 272,300.95 |
+| Correctly Stopped (rules fired) | 299 | INR 1,956,623.61 |
+| Escalated Unresolved | 299 | INR 1,956,623.61 |
+| No Action | 78 | INR 117,943.17 |
+| **Recovery Rate** (recovered ÷ flagged for retry) | | **0.3868** |
 
 #### C. Cost Analysis (Dummy Assumptions — Stated Explicitly)
 - False Positive (retry attempted, didn't recover): ₹10 each

@@ -18,10 +18,14 @@ from pathlib import Path
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-AUDIT_LOG_PATH = "audit_log.jsonl"
-DATASET_PATH = "synthetic_payment_failures.jsonl"
-DETECTION_REPORT_PATH = "measurement_report.md"
-DETECTION_JSON_PATH = "measurement_report.json"
+AUDIT_LOG_PATH = "logs/audit_log.jsonl"
+DATASET_PATH = "data/synthetic_payment_failures.jsonl"
+TEST_DATASET_PATH = "data/synthetic_payment_failures_test.jsonl"
+DETECTION_REPORT_PATH = "reports/measurement_report.md"
+DETECTION_JSON_PATH = "reports/measurement_report.json"
+
+MODEL_PATH = "models/detector_model.pkl"
+SCALER_PATH = "models/detector_scaler.pkl"
 
 # Dummy cost assumptions (explicitly stated as assumptions)
 FP_COST = 10.0       # INR10 wasted-intervention cost per false positive
@@ -63,15 +67,15 @@ def compute_detection_metrics():
     import detection
 
     # Load model and scaler
-    with open("detector_model.pkl", "rb") as f:
+    with open(MODEL_PATH, "rb") as f:
         model = pickle.load(f)
-    with open("detector_scaler.pkl", "rb") as f:
+    with open(SCALER_PATH, "rb") as f:
         scaler = pickle.load(f)
 
     # Load test data
     X_test = []
     y_test = []
-    with open("synthetic_payment_failures_test.jsonl", "r") as f:
+    with open(TEST_DATASET_PATH, "r") as f:
         for line in f:
             ev = json.loads(line)
             x, _ = detection.extract_features(ev)
@@ -410,9 +414,9 @@ def main():
     print("\nRunning Section C: Sanity Check...")
     sanity = sanity_check(audit_events, dataset, pipeline_metrics)
     if sanity['fully_accounted']:
-        print("  ✓ All events accounted for")
+        print("  [OK] All events accounted for")
     else:
-        print("  ✗ ISSUES:")
+        print("  [ERROR] ISSUES:")
         for issue in sanity['issues']:
             print(f"    - {issue}")
 
